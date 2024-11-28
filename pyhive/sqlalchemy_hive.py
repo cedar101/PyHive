@@ -12,8 +12,12 @@ import datetime
 import decimal
 
 import re
+from typing import Type, Any
+
 from sqlalchemy import exc
-from sqlalchemy.sql import text
+from sqlalchemy.sql import text, type_api, sqltypes
+from sqlalchemy.sql.type_api import _LiteralProcessorType
+from sqlalchemy.engine.interfaces import Dialect
 
 try:
     from sqlalchemy import processors
@@ -99,6 +103,54 @@ class HiveTimestamp(HiveStringTypeBase):
 
     def adapt(self, impltype, **kwargs):
         return self.impl
+
+
+class HiveInterval(type_api.NativeForEmulated, sqltypes._AbstractInterval):
+    """HiveQL INTERVAL type."""
+
+    __visit_name__ = "INTERVAL"
+    native = True
+
+    def __init__(self, precision: int | None = None, fields: str | None = None) -> None:
+        """Construct an INTERVAL.
+
+        :param precision: optional integer precision value
+        :param fields: string fields specifier.  allows storage of fields
+         to be limited, such as ``"YEAR"``, ``"MONTH"``, ``"DAY TO HOUR"``,
+         etc.
+
+         .. versionadded:: 1.2
+
+        """
+        self.precision = precision
+        self.fields = fields
+
+    @classmethod
+    def adapt_emulated_to_native(
+        cls,
+        interval: sqltypes.Interval,
+        **kw: Any,  # type: ignore[override]
+    ) -> HiveInterval:
+        return cls(precision=interval.second_precision)
+
+    @property
+    def _type_affinity(self) -> Type[sqltypes.Interval]:
+        return sqltypes.Interval
+
+    def as_generic(self, allow_nulltype: bool = False) -> sqltypes.Interval:
+        return sqltypes.Interval(native=True, second_precision=self.precision)
+
+    @property
+    def python_type(self) -> Type[datetime.timedelta]:
+        return datetime.timedelta
+
+    def literal_processor(
+        self, dialect: Dialect
+    ) -> _LiteralProcessorType[datetime.timedelta] | None:
+        def process(value: datetime.timedelta) -> str:
+            return f"make_interval(secs=>{value.total_seconds()})"
+
+        return process
 
 
 class HiveDecimal(HiveStringTypeBase):
@@ -288,6 +340,14 @@ class HiveTypeCompiler(compiler.GenericTypeCompiler):
 
     def visit_DATETIME(self, type_):
         return "TIMESTAMP"
+
+    def visit_INTERVAL(self, type_, **kw):
+        text = "INTERVAL"
+        if type_.fields is not None:
+            text += f" {type_.fields}"
+        if type_.precision is not None:
+            text += f" ({type_.precision})"
+        return text
 
 
 class HiveExecutionContext(default.DefaultExecutionContext):
