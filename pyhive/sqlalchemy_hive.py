@@ -208,6 +208,8 @@ _type_map = {
     "struct": types.String,
     "uniontype": types.String,
     "decimal": HiveDecimal,
+    "interval": HiveInterval,
+    "timedelta": HiveInterval,
 }
 
 
