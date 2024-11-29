@@ -105,7 +105,11 @@ class HiveTimestamp(HiveStringTypeBase):
 
 
 class HiveInterval(type_api.NativeForEmulated, sqltypes._AbstractInterval):
-    """HiveQL INTERVAL type."""
+    """
+    HiveQL INTERVAL type.
+
+    (From PostgreSQL dialect)
+    """
 
     __visit_name__ = "INTERVAL"
     native = True
@@ -210,6 +214,12 @@ _type_map = {
     "decimal": HiveDecimal,
     "interval": HiveInterval,
     "timedelta": HiveInterval,
+}
+
+_colspecs = {
+    sqltypes.Interval: HiveInterval,
+    sqltypes.DateTime: HiveTimestamp,
+    sqltypes.Date: HiveDate,
 }
 
 
@@ -396,6 +406,7 @@ class HiveDialect(default.DefaultDialect):
     supports_multivalues_insert = True
     supports_sane_rowcount = False
     supports_statement_cache = False
+    colspecs = _colspecs
 
     @classmethod
     def dbapi(cls):
