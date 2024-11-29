@@ -355,7 +355,7 @@ class HiveTypeCompiler(compiler.GenericTypeCompiler):
     def visit_INTERVAL(self, type_, **kw):
         text = "INTERVAL"
         if type_.precision is not None:
-            text += f" ({type_.precision})"
+            text += f" '{type_.precision}'"
         if type_.fields is not None:
             text += f" {type_.fields}"
         return text
