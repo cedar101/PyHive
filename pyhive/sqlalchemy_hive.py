@@ -396,6 +396,7 @@ class HiveDialect(default.DefaultDialect):
     supports_multivalues_insert = True
     supports_sane_rowcount = False
     supports_statement_cache = False
+    colspecs = {sqltypes.Interval: HiveInterval}
 
     @classmethod
     def dbapi(cls):
