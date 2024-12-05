@@ -229,7 +229,8 @@ class HiveDDLCompiler(DDLCompiler):
                 formatted_name = self.preparer.format_constraint(constraint)
                 if formatted_name is not None:
                     yield f"CONSTRAINT {formatted_name} "
-            remote_table = list(constraint.elements)[0].column.table
+            elements_iter = iter(constraint.elements)
+            remote_table = next(elements_iter).column.table
             yield "FOREIGN KEY({}) REFERENCES {} ({}) DISABLE NOVALIDATE".format(
                 ", ".join(preparer.quote(f.parent.name) for f in constraint.elements),
                 self.define_constraint_remote_table(constraint, remote_table, preparer),
