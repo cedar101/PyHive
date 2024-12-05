@@ -202,25 +202,44 @@ class HiveDDLCompiler(DDLCompiler):
     """
 
     def visit_primary_key_constraint(self, constraint, **kw):
-        if not constraint:
-            return ""
-        text = ""
-        if constraint.name is not None:
-            formatted_name = self.preparer.format_constraint(constraint)
-            if formatted_name is not None:
-                text += f"CONSTRAINT {formatted_name}"
+        def _text():
+            if constraint.name is not None:
+                formatted_name = self.preparer.format_constraint(constraint)
+                if formatted_name is not None:
+                    yield f"CONSTRAINT {formatted_name}"
 
-        text += "PRIMARY KEY ({}) DISABLE NOVALIDATE RELY".format(
-            ", ".join(
-                self.preparer.quote(c.name)
-                for c in (
-                    constraint.columns_autoinc_first
-                    if constraint._implicit_generated
-                    else constraint.columns
+            yield "PRIMARY KEY ({}) DISABLE NOVALIDATE RELY".format(
+                ", ".join(
+                    self.preparer.quote(c.name)
+                    for c in (
+                        constraint.columns_autoinc_first
+                        if constraint._implicit_generated
+                        else constraint.columns
+                    )
                 )
             )
-        )
-        return text
+
+        return "".join(_text()) if constraint else ""
+
+    def visit_foreign_key_constraint(self, constraint, **kw):
+        preparer = self.preparer
+
+        def _text():
+            if constraint.name is not None:
+                formatted_name = self.preparer.format_constraint(constraint)
+                if formatted_name is not None:
+                    yield f"CONSTRAINT {formatted_name} "
+            remote_table = list(constraint.elements)[0].column.table
+            yield "FOREIGN KEY({}) REFERENCES {} ({}) DISABLE NOVALIDATE".format(
+                ", ".join(preparer.quote(f.parent.name) for f in constraint.elements),
+                self.define_constraint_remote_table(constraint, remote_table, preparer),
+                ", ".join(preparer.quote(f.column.name) for f in constraint.elements),
+            )
+            yield self.define_constraint_match(constraint)
+            yield self.define_constraint_cascades(constraint)
+            yield self.define_constraint_deferrability(constraint)
+
+        return "".join(_text())
 
     def post_create_table(self, table):
         """Build table-level CREATE options."""
