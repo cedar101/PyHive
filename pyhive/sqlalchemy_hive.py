@@ -227,7 +227,7 @@ class HiveDDLCompiler(DDLCompiler):
                 table_properties = [
                     f"'{property_}' = '{value}'"
                     for property_, value in sorted(
-                        table.kwargs.get("table_properties", {}).items()
+                        table.kwargs["hive_table_properties"].items()
                     )
                 ]
                 yield f'TBLPROPERTIES ({", ".join(table_properties)})'
