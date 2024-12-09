@@ -215,10 +215,13 @@ class HiveDDLCompiler(DDLCompiler):
                 yield f"COMMENT '{table.comment}'"
 
             if "hive_partitioned_by" in table.kwargs:
-                yield f'PARTITIONED BY {table.kwargs.get("partitioned_by")}'
+                yield f'PARTITIONED BY {table.kwargs["hive_partitioned_by"]}'
+
+            if "hive_clustered_by" in table.kwargs:
+                yield f'CLUSTERED BY {table.kwargs["hive_clustered_by"]}'
 
             if "hive_stored_as" in table.kwargs:
-                yield f'STORED AS {table.kwargs.get("hive_stored_as")}'
+                yield f'STORED AS {table.kwargs["hive_stored_as"]}'
 
             if "hive_table_properties" in table.kwargs:
                 table_properties = [
