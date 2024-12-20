@@ -194,6 +194,12 @@ class HiveCompiler(SQLCompiler):
     def visit_char_length_func(self, fn, **kw):
         return "length{}".format(self.function_argspec(fn, **kw))
 
+    def get_from_hint_text(self, table, text):
+        return text
+
+    def get_crud_hint_text(self, table, text):
+        return text
+
 
 class HiveDDLCompiler(DDLCompiler):
     """
