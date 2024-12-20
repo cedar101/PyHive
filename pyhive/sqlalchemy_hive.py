@@ -161,6 +161,9 @@ _type_map = {
 
 class HiveCompiler(SQLCompiler):
     insert_regex = re.compile(r"(INSERT INTO) ([^\s]+) \([^\)]*\)")
+    insert_partition_regex = re.compile(
+        r"(INSERT INTO) ([^\s]+) (PARTITION \([^\)]+\)) \([^\)]*\)"
+    )
 
     def visit_concat_op_binary(self, binary, operator, **kw):
         return "concat(%s, %s)" % (
@@ -174,10 +177,13 @@ class HiveCompiler(SQLCompiler):
         #   INSERT INTO `pyhive_test_database`.`test_table` (`a`) SELECT ...
         #   =>
         #   INSERT INTO TABLE `pyhive_test_database`.`test_table` SELECT ...
-        assert self.__class__.insert_regex.search(
+        if self.__class__.insert_regex.search(result):
+            return self.__class__.insert_regex.sub(r"\1 TABLE \2", result)
+
+        assert self.__class__.insert_partition_regex.search(
             result
         ), f"Unexpected visit_insert result: {result}"
-        return self.__class__.insert_regex.sub(r"\1 TABLE \2", result)
+        return self.__class__.insert_partition_regex.sub(r"\1 TABLE \2 \3", result)
 
     def visit_column(self, *args, **kwargs):
         result = super(HiveCompiler, self).visit_column(*args, **kwargs)
