@@ -199,6 +199,9 @@ class HiveArray(types.ARRAY):
             )
         if isinstance(item_type, type):
             item_type = item_type()
+        if isinstance(item_type, str):
+            item_type = _type_map[item_type]
+
         self.item_type = item_type
         self.dimensions = dimensions
         self.zero_indexes = zero_indexes
