@@ -432,7 +432,7 @@ class HiveTypeCompiler(compiler.GenericTypeCompiler):
         return "TIMESTAMP"
 
     def visit_ARRAY(self, type_, **kw):
-        return f"ARRAY<{type_.item_type}>"
+        return f"ARRAY<{_type_map[type_.item_type]}>"
 
 
 class HiveExecutionContext(default.DefaultExecutionContext):
