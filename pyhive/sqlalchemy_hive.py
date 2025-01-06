@@ -547,26 +547,27 @@ class HiveDialect(default.DefaultDialect):
         for col_name, col_type, _comment in rows:
             if col_name == "# Partition Information":
                 break
+
             # Take out the more detailed type information
             # e.g. 'map<int,int>' -> 'map'
             #      'decimal(10,1)' -> decimal
-            item_type = re.search(r"^array<(\w+)>", col_type, re.I).group(1)
-            col_type = re.search(r"^\w+", col_type).group(0)
+            col_type_name = re.search(r"^\w+", col_type).group(0)
             try:
-                coltype = _type_map[col_type]
+                mapped_type = _type_map[col_type_name]
             except KeyError:
                 util.warn(
                     "Did not recognize type '%s' of column '%s'" % (col_type, col_name)
                 )
-                coltype = types.NullType
+                mapped_type = types.NullType
 
-            if item_type is not None:
-                coltype.item_type = item_type
+            array_match = re.search(r"^array<(\w+)>", col_type, re.I)
+            if array_match is not None:
+                mapped_type.item_type = array_match.group(1)
 
             result.append(
                 {
                     "name": col_name,
-                    "type": coltype,
+                    "type": mapped_type,
                     "nullable": True,
                     "default": None,
                     "comment": _comment,
