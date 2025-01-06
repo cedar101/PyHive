@@ -11,6 +11,8 @@ import datetime
 import decimal
 
 import re
+from typing import Any
+
 from sqlalchemy import exc
 from sqlalchemy.sql import text
 
@@ -19,8 +21,7 @@ try:
 except ImportError:
     # Required for SQLAlchemy>=2.0
     from sqlalchemy.engine import processors
-from sqlalchemy import types
-from sqlalchemy import util
+from sqlalchemy import types, util
 
 # TODO shouldn't use mysql type
 try:
@@ -35,6 +36,7 @@ except ImportError:
 from sqlalchemy.engine import default
 from sqlalchemy.sql import compiler
 from sqlalchemy.sql.compiler import SQLCompiler, DDLCompiler
+from sqlalchemy.sql._typing import _TypeEngineArgument
 
 from pyhive import hive
 from pyhive.common import UniversalSet
@@ -126,6 +128,140 @@ class HiveDecimal(HiveStringTypeBase):
         return self.impl
 
 
+# from dialects/postgresql/array.py
+
+
+class HiveArray(types.ARRAY):
+    """
+    Hive ARRAY type.
+
+    The :class:`_sqlalchemy_hive.HiveArray` type is constructed in the same way
+    as the core :class:`_types.ARRAY` type; a member type is required, and a
+    number of dimensions is recommended if the type is to be used for more
+    than one dimension::
+
+        from pyhive.sqlalchemy_hive import HiveArray
+
+        mytable = Table(
+            "mytable",
+            metadata,
+            Column("data", HiveArray(Integer, dimensions=2)),
+        )
+
+
+    Indexed access is one-based by default, to match that of PostgreSQL;
+    for zero-based indexed access, set
+    :paramref:`_sqlalchemy_hive.HiveArray.zero_indexes`.
+
+    .. seealso::
+
+        :class:`_types.ARRAY` - base array type
+
+    """
+
+    def __init__(
+        self,
+        item_type: _TypeEngineArgument[Any],
+        dimensions: int | None = None,
+        zero_indexes: bool = False,
+    ):
+        """Construct an ARRAY.
+
+        E.g.::
+
+          Column("myarray", HiveArray(Integer))
+
+        Arguments are:
+
+        :param item_type: The data type of items of this array. Note that
+          dimensionality is irrelevant here, so multi-dimensional arrays like
+          ``INTEGER[][]``, are constructed as ``HiveArray(Integer)``, not as
+          ``HiveArray(HiveArray(Integer))`` or such.
+
+        :param dimensions: if non-None, the ARRAY will assume a fixed
+         number of dimensions.  This will cause the DDL emitted for this
+         ARRAY to include the exact number of bracket clauses ``[]``,
+         and will also optimize the performance of the type overall.
+         Note that arrays are always implicitly "non-dimensioned",
+         meaning they can store any number of dimensions no matter how
+         they were declared.
+
+        :param zero_indexes=False: when True, index values will be converted
+         between Python zero-based and Hive one-based indexes, e.g.
+         a value of one will be added to all index values before passing
+         to the database.
+
+        """
+        if isinstance(item_type, HiveArray):
+            raise ValueError(
+                "Do not nest ARRAY types; ARRAY(basetype) "
+                "handles multi-dimensional arrays of basetype"
+            )
+        if isinstance(item_type, type):
+            item_type = item_type()
+        self.item_type = item_type
+        self.dimensions = dimensions
+        self.zero_indexes = zero_indexes
+
+    @property
+    def python_type(self):
+        return list
+
+    def compare_values(self, x, y):
+        return x == y
+
+    @util.memoized_property
+    def _against_native_enum(self):
+        return isinstance(self.item_type, types.Enum) and self.item_type.native_enum
+
+    def literal_processor(self, dialect):
+        item_proc = self.item_type.dialect_impl(dialect).literal_processor(dialect)
+        if item_proc is None:
+            return None
+
+        def to_str(elements):
+            return f"[{', '.join(elements)}]"
+
+        def process(value):
+            inner = self._apply_item_processor(
+                value, item_proc, self.dimensions, to_str
+            )
+            return inner
+
+        return process
+
+    def bind_processor(self, dialect):
+        item_proc = self.item_type.dialect_impl(dialect).bind_processor(dialect)
+
+        def process(value):
+            if value is None:
+                return value
+            else:
+                return self._apply_item_processor(
+                    value, item_proc, self.dimensions, list
+                )
+
+        return process
+
+    def result_processor(self, dialect, coltype):
+        item_proc = self.item_type.dialect_impl(dialect).result_processor(
+            dialect, coltype
+        )
+
+        def process(value):
+            if value is None:
+                return value
+            else:
+                return self._apply_item_processor(
+                    value,
+                    item_proc,
+                    self.dimensions,
+                    tuple if self.as_tuple else list,
+                )
+
+        return process
+
+
 class HiveIdentifierPreparer(compiler.IdentifierPreparer):
     # Just quote everything to make things simpler / easier to upgrade
     reserved_words = UniversalSet()
@@ -151,7 +287,7 @@ _type_map = {
     "date": HiveDate,
     "timestamp": HiveTimestamp,
     "binary": types.String,
-    "array": types.String,
+    "array": HiveArray,
     "map": types.String,
     "struct": types.String,
     "uniontype": types.String,
@@ -206,6 +342,9 @@ class HiveCompiler(SQLCompiler):
     def get_crud_hint_text(self, table, text):
         return text
 
+    def visit_array(self, element, **kw):
+        return f"[{self.visit_clauselist(element, **kw)}]"
+
 
 class HiveDDLCompiler(DDLCompiler):
     """
@@ -254,6 +393,9 @@ class HiveDDLCompiler(DDLCompiler):
             text += f" COMMENT '{comment}'"
         return text
 
+    def visit_ARRAY(self, type_, **kw):
+        return self.process(type_.item_type, **kw)
+
 
 class HiveTypeCompiler(compiler.GenericTypeCompiler):
     def visit_INTEGER(self, type_):
@@ -288,6 +430,9 @@ class HiveTypeCompiler(compiler.GenericTypeCompiler):
 
     def visit_DATETIME(self, type_):
         return "TIMESTAMP"
+
+    def visit_ARRAY(self, type_):
+        return "ARRAY"
 
 
 class HiveExecutionContext(default.DefaultExecutionContext):
