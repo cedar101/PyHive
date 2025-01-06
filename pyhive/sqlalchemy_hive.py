@@ -562,7 +562,7 @@ class HiveDialect(default.DefaultDialect):
 
             array_match = re.search(r"^array<(\w+)>", col_type, re.I)
             if array_match is not None:
-                mapped_type.item_type = array_match.group(1)
+                mapped_type.item_type = _type_map[array_match.group(1)]
 
             result.append(
                 {
