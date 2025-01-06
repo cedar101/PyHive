@@ -560,6 +560,9 @@ class HiveDialect(default.DefaultDialect):
                 )
                 coltype = types.NullType
 
+            if item_type is not None:
+                coltype.item_type = item_type
+
             result.append(
                 {
                     "name": col_name,
