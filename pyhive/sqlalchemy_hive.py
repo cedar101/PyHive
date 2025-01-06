@@ -393,9 +393,6 @@ class HiveDDLCompiler(DDLCompiler):
             text += f" COMMENT '{comment}'"
         return text
 
-    def visit_ARRAY(self, type_, **kw):
-        return self.process(type_.item_type, **kw)
-
 
 class HiveTypeCompiler(compiler.GenericTypeCompiler):
     def visit_INTEGER(self, type_):
@@ -431,8 +428,8 @@ class HiveTypeCompiler(compiler.GenericTypeCompiler):
     def visit_DATETIME(self, type_):
         return "TIMESTAMP"
 
-    def visit_ARRAY(self, type_):
-        return "ARRAY"
+    def visit_ARRAY(self, type_, **kw):
+        return f"ARRAY<{type_.item_type}>"
 
 
 class HiveExecutionContext(default.DefaultExecutionContext):
@@ -553,6 +550,7 @@ class HiveDialect(default.DefaultDialect):
             # Take out the more detailed type information
             # e.g. 'map<int,int>' -> 'map'
             #      'decimal(10,1)' -> decimal
+            item_type = re.search(r"^array<(\w+)>", col_type, re.I).group(1)
             col_type = re.search(r"^\w+", col_type).group(0)
             try:
                 coltype = _type_map[col_type]
