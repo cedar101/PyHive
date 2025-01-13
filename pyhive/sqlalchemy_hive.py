@@ -319,9 +319,9 @@ class HiveCompiler(SQLCompiler):
         if self.__class__.insert_regex.search(result):
             return self.__class__.insert_regex.sub(r"\1 TABLE \2", result)
 
-        assert self.__class__.insert_partition_regex.search(
-            result
-        ), f"Unexpected visit_insert result: {result}"
+        assert self.__class__.insert_partition_regex.search(result), (
+            f"Unexpected visit_insert result: {result}"
+        )
         return self.__class__.insert_partition_regex.sub(r"\1 TABLE \2 \3", result)
 
     def visit_column(self, *args, **kwargs):
@@ -348,6 +348,12 @@ class HiveCompiler(SQLCompiler):
     def visit_array(self, element, **kw):
         return f"[{self.visit_clauselist(element, **kw)}]"
 
+    def visit_regexp_match_op_binary(self, binary, operator, **kw):
+        return self._generate_generic_binary(binary, " REGEXP ", **kw)
+
+    def visit_not_regexp_match_op_binary(self, binary, operator, **kw):
+        return self._generate_generic_binary(binary, " NOT REGEXP ", **kw)
+
 
 class HiveDDLCompiler(DDLCompiler):
     """
@@ -370,13 +376,13 @@ class HiveDDLCompiler(DDLCompiler):
                 yield f"COMMENT '{table.comment}'"
 
             if "hive_partitioned_by" in table.kwargs:
-                yield f'PARTITIONED BY {table.kwargs["hive_partitioned_by"]}'
+                yield f"PARTITIONED BY {table.kwargs['hive_partitioned_by']}"
 
             if "hive_clustered_by" in table.kwargs:
-                yield f'CLUSTERED BY {table.kwargs["hive_clustered_by"]}'
+                yield f"CLUSTERED BY {table.kwargs['hive_clustered_by']}"
 
             if "hive_stored_as" in table.kwargs:
-                yield f'STORED AS {table.kwargs["hive_stored_as"]}'
+                yield f"STORED AS {table.kwargs['hive_stored_as']}"
 
             if "hive_table_properties" in table.kwargs:
                 table_properties = [
@@ -385,9 +391,9 @@ class HiveDDLCompiler(DDLCompiler):
                         table.kwargs["hive_table_properties"].items()
                     )
                 ]
-                yield f'TBLPROPERTIES ({", ".join(table_properties)})'
+                yield f"TBLPROPERTIES ({', '.join(table_properties)})"
 
-        return f'\n{"\n".join(table_opts(table))}'
+        return f"\n{'\n'.join(table_opts(table))}"
 
     def visit_create_column(self, create, first_pk=False, **kw):
         text = super().visit_create_column(create, first_pk, **kw)
